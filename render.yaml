@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: qapishield-api
+    env: python
+    region: oregon
+    plan: starter
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "./start.sh"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: qapishield-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 30
+    healthCheckPath: /health
+
+databases:
+  - name: qapishield-db
+    databaseName: qapishield
+    user: qapishield
+    plan: starter
