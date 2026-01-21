@@ -11,8 +11,7 @@ app = FastAPI(
     title="QAPIShield API",
     description="QAPI and Compliance Management System for Skilled Nursing Facilities",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+)
     openapi_url="/openapi.json"
 )
 
