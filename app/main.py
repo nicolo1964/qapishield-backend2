@@ -9,7 +9,9 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="QAPIShield API",
     version="1.0.0",
-    openapi_url="/openapi.json"
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
 
 # Configure CORS
