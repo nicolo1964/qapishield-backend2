@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+import uuid
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import auth, facilities, residents, assessments, qapi
 from app.core.database import engine, Base
@@ -22,6 +23,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    request.state.request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    return await call_next(request)
 
 # Include Routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])

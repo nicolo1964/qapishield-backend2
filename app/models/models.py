@@ -18,6 +18,16 @@ class RiskLevel(str, enum.Enum):
     MODERATE = "moderate"
     HIGH = "high"
 
+class AuditActionType(str, enum.Enum):
+    READ = "read"
+    CREATE = "create"
+    UPDATE = "update"
+    DELETE = "delete"
+
+class AuditOutcome(str, enum.Enum):
+    SUCCESS = "success"
+    FAILURE = "failure"
+
 class Facility(Base):
     __tablename__ = "facilities"
     
@@ -89,3 +99,19 @@ class Assessment(Base):
     # Relationships
     resident = relationship("Resident", back_populates="assessments")
     facility = relationship("Facility", back_populates="assessments")
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    actor_role = Column(Enum(UserRole, values_callable=lambda x: [e.value for e in x]), nullable=False)
+    action_type = Column(Enum(AuditActionType, values_callable=lambda x: [e.value for e in x]), nullable=False)
+    resource_type = Column(String(50), nullable=False)
+    resource_id = Column(Integer, nullable=True)
+    facility_id = Column(Integer, ForeignKey("facilities.id"), nullable=False)
+    ip_address = Column(String(45), nullable=True)
+    request_id = Column(String(36), nullable=False)
+    outcome = Column(Enum(AuditOutcome, values_callable=lambda x: [e.value for e in x]), nullable=False)
+    changed_fields = Column(Text, nullable=True)  # JSON array of field names only, never values
