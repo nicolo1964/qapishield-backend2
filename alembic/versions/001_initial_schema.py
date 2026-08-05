@@ -93,8 +93,89 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_assessments_id'), 'assessments', ['id'], unique=False)
 
+    # Create audit_logs table
+    op.create_table(
+        'audit_logs',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('actor_user_id', sa.Integer(), nullable=False),
+        sa.Column('actor_role', sa.Enum('admin', 'don', 'mds', 'nurse', name='userrole', create_type=False), nullable=False),
+        sa.Column('action_type', sa.Enum('read', 'create', 'update', 'delete', name='auditactiontype'), nullable=False),
+        sa.Column('resource_type', sa.String(length=50), nullable=False),
+        sa.Column('resource_id', sa.Integer(), nullable=True),
+        sa.Column('facility_id', sa.Integer(), nullable=False),
+        sa.Column('ip_address', sa.String(length=45), nullable=True),
+        sa.Column('request_id', sa.String(length=36), nullable=False),
+        sa.Column('outcome', sa.Enum('success', 'failure', name='auditoutcome'), nullable=False),
+        sa.Column('changed_fields', sa.Text(), nullable=True),
+        sa.ForeignKeyConstraint(['actor_user_id'], ['users.id'], ),
+        sa.ForeignKeyConstraint(['facility_id'], ['facilities.id'], ),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_audit_logs_id'), 'audit_logs', ['id'], unique=False)
+    op.create_index('ix_audit_logs_facility_id', 'audit_logs', ['facility_id'], unique=False)
+    op.create_index('ix_audit_logs_actor_user_id', 'audit_logs', ['actor_user_id'], unique=False)
+    op.create_index('ix_audit_logs_resource', 'audit_logs', ['resource_type', 'resource_id'], unique=False)
+    op.create_index('ix_audit_logs_timestamp', 'audit_logs', ['timestamp'], unique=False)
+
+    # Append-only enforcement: reject UPDATE/DELETE on audit_logs at the database
+    # level, even for the table owner. Trigger syntax is engine-specific.
+    bind = op.get_bind()
+    if bind.dialect.name == 'postgresql':
+        op.execute("""
+            CREATE OR REPLACE FUNCTION prevent_audit_log_modification()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                RAISE EXCEPTION 'audit_logs is append-only: % is not permitted', TG_OP;
+            END;
+            $$ LANGUAGE plpgsql;
+        """)
+        op.execute("""
+            CREATE TRIGGER audit_logs_no_update
+            BEFORE UPDATE ON audit_logs
+            FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_modification();
+        """)
+        op.execute("""
+            CREATE TRIGGER audit_logs_no_delete
+            BEFORE DELETE ON audit_logs
+            FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_modification();
+        """)
+    elif bind.dialect.name == 'sqlite':
+        op.execute("""
+            CREATE TRIGGER audit_logs_no_update
+            BEFORE UPDATE ON audit_logs
+            BEGIN
+                SELECT RAISE(ABORT, 'audit_logs is append-only: UPDATE is not permitted');
+            END;
+        """)
+        op.execute("""
+            CREATE TRIGGER audit_logs_no_delete
+            BEFORE DELETE ON audit_logs
+            BEGIN
+                SELECT RAISE(ABORT, 'audit_logs is append-only: DELETE is not permitted');
+            END;
+        """)
+
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    if bind.dialect.name == 'postgresql':
+        op.execute("DROP TRIGGER IF EXISTS audit_logs_no_delete ON audit_logs;")
+        op.execute("DROP TRIGGER IF EXISTS audit_logs_no_update ON audit_logs;")
+        op.execute("DROP FUNCTION IF EXISTS prevent_audit_log_modification();")
+    elif bind.dialect.name == 'sqlite':
+        op.execute("DROP TRIGGER IF EXISTS audit_logs_no_delete;")
+        op.execute("DROP TRIGGER IF EXISTS audit_logs_no_update;")
+    op.drop_index('ix_audit_logs_timestamp', table_name='audit_logs')
+    op.drop_index('ix_audit_logs_resource', table_name='audit_logs')
+    op.drop_index('ix_audit_logs_actor_user_id', table_name='audit_logs')
+    op.drop_index('ix_audit_logs_facility_id', table_name='audit_logs')
+    op.drop_index(op.f('ix_audit_logs_id'), table_name='audit_logs')
+    op.drop_table('audit_logs')
+    if bind.dialect.name == 'postgresql':
+        op.execute("DROP TYPE IF EXISTS auditoutcome;")
+        op.execute("DROP TYPE IF EXISTS auditactiontype;")
+
     op.drop_index(op.f('ix_assessments_id'), table_name='assessments')
     op.drop_table('assessments')
     op.drop_index(op.f('ix_residents_reference_id'), table_name='residents')
