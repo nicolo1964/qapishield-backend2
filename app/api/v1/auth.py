@@ -100,14 +100,33 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     Login with email and password, returns JWT token
     """
     user = db.query(User).filter(User.email == form_data.username).first()
-    
+
+    if user and user.locked_until and user.locked_until > datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail={
+                "message": "Account temporarily locked due to repeated failed login attempts. Please try again later.",
+                "error_code": "ACCOUNT_LOCKED",
+                "locked_until": user.locked_until.isoformat(),
+            },
+        )
+
     if not user or not verify_password(form_data.password, user.hashed_password):
+        if user:
+            user.failed_login_attempts += 1
+            if user.failed_login_attempts >= settings.LOGIN_LOCKOUT_THRESHOLD:
+                user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=settings.LOGIN_LOCKOUT_DURATION_MINUTES)
+            db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    db.commit()
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

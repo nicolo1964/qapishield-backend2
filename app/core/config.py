@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     LOGIN_RATE_LIMIT: str = "5/minute"
     REGISTER_RATE_LIMIT: str = "1/hour"
 
+    # Account lockout after repeated failed login attempts
+    LOGIN_LOCKOUT_THRESHOLD: int = 3
+    LOGIN_LOCKOUT_DURATION_MINUTES: int = 15
+
     # Token link expiry (hours)
     VERIFICATION_LINK_EXPIRES_HOURS: int = 72
     PASSWORD_RESET_EXPIRES_HOURS: int = 1

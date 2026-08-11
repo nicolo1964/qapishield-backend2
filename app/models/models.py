@@ -61,6 +61,8 @@ class User(Base):
     is_verified = Column(Boolean, default=False, nullable=False)
     verification_sent_at = Column(DateTime(timezone=True), nullable=True)
     verification_reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
+    failed_login_attempts = Column(Integer, default=0, nullable=False)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
