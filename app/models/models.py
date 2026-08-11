@@ -58,9 +58,12 @@ class User(Base):
     role = Column(Enum(UserRole), nullable=False)
     facility_id = Column(Integer, ForeignKey("facilities.id"), nullable=False)
     is_active = Column(Boolean, default=True)
+    is_verified = Column(Boolean, default=False, nullable=False)
+    verification_sent_at = Column(DateTime(timezone=True), nullable=True)
+    verification_reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # Relationships
     facility = relationship("Facility", back_populates="users")
 
