@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     LOGIN_RATE_LIMIT: str = "5/minute"
     REGISTER_RATE_LIMIT: str = "1/hour"
 
+    # Token link expiry (hours)
+    VERIFICATION_LINK_EXPIRES_HOURS: int = 72
+    PASSWORD_RESET_EXPIRES_HOURS: int = 1
+    STAFF_INVITE_EXPIRES_HOURS: int = 24
+
     # SMTP / Email
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587

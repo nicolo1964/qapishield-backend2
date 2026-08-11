@@ -23,11 +23,6 @@ from app.services.email import (
 from datetime import datetime, timedelta, timezone
 from app.core.config import settings
 
-VERIFICATION_LINK_EXPIRES_HOURS = 72
-PASSWORD_RESET_EXPIRES_HOURS = 1
-STAFF_INVITE_EXPIRES_HOURS = 24
-
-
 def _password_fingerprint(hashed_password: str) -> str:
     return hashlib.sha256(hashed_password.encode()).hexdigest()[:16]
 
@@ -90,7 +85,7 @@ async def register(
 
     verification_token = create_access_token(
         {"sub": str(user.id), "purpose": "email_verification"},
-        expires_delta=timedelta(hours=VERIFICATION_LINK_EXPIRES_HOURS),
+        expires_delta=timedelta(hours=settings.VERIFICATION_LINK_EXPIRES_HOURS),
     )
     background_tasks.add_task(
         send_verification_email, user.email, build_verification_link(verification_token)
@@ -181,7 +176,7 @@ async def resend_verification(
 
         verification_token = create_access_token(
             {"sub": str(user.id), "purpose": "email_verification"},
-            expires_delta=timedelta(hours=VERIFICATION_LINK_EXPIRES_HOURS),
+            expires_delta=timedelta(hours=settings.VERIFICATION_LINK_EXPIRES_HOURS),
         )
         background_tasks.add_task(
             send_verification_email, user.email, build_verification_link(verification_token)
@@ -209,7 +204,7 @@ async def forgot_password(
                 "purpose": "password_reset",
                 "pwd_fp": _password_fingerprint(user.hashed_password),
             },
-            expires_delta=timedelta(hours=PASSWORD_RESET_EXPIRES_HOURS),
+            expires_delta=timedelta(hours=settings.PASSWORD_RESET_EXPIRES_HOURS),
         )
         background_tasks.add_task(
             send_password_reset_email, user.email, build_password_reset_link(reset_token)
@@ -284,7 +279,7 @@ async def invite_staff(
             "purpose": "staff_invite",
             "pwd_fp": _password_fingerprint(user.hashed_password),
         },
-        expires_delta=timedelta(hours=STAFF_INVITE_EXPIRES_HOURS),
+        expires_delta=timedelta(hours=settings.STAFF_INVITE_EXPIRES_HOURS),
     )
     background_tasks.add_task(
         send_staff_invite_email, user.email, build_invite_link(invite_token)

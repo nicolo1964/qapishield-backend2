@@ -5,11 +5,11 @@ from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import text
 from app.core.database import SessionLocal
+from app.core.config import settings
 from app.core.security import create_access_token
 from app.services.email import send_verification_reminder_email, build_verification_link
 
 REMINDER_AT_DELTA = timedelta(hours=48)
-LINK_EXPIRES_AFTER_HOURS = 72
 
 
 def send_verification_reminders() -> None:
@@ -19,7 +19,7 @@ def send_verification_reminders() -> None:
     db = SessionLocal()
     try:
         now = datetime.now(timezone.utc)
-        cutoff_start = now - timedelta(hours=LINK_EXPIRES_AFTER_HOURS)
+        cutoff_start = now - timedelta(hours=settings.VERIFICATION_LINK_EXPIRES_HOURS)
         cutoff_end = now - REMINDER_AT_DELTA
 
         due = db.execute(
@@ -36,7 +36,7 @@ def send_verification_reminders() -> None:
         ).all()
 
         for row in due:
-            remaining = (row.verification_sent_at + timedelta(hours=LINK_EXPIRES_AFTER_HOURS)) - now
+            remaining = (row.verification_sent_at + timedelta(hours=settings.VERIFICATION_LINK_EXPIRES_HOURS)) - now
             token = create_access_token(
                 {"sub": str(row.id), "purpose": "email_verification"},
                 expires_delta=remaining,
