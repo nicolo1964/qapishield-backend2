@@ -44,7 +44,7 @@ class Settings(BaseSettings):
 
     # SMTP / Email
     SMTP_HOST: str = ""
-    SMTP_PORT: int =
+    SMTP_PORT: int = 587
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM_EMAIL: str = ""
