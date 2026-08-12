@@ -43,11 +43,11 @@ class Settings(BaseSettings):
     STAFF_INVITE_EXPIRES_HOURS: int = 24
 
     # SMTP / Email
-    SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
-    SMTP_USERNAME: str = "devdab.contact@gmail.com"
-    SMTP_PASSWORD: str = "gggxhkbrcqosrmdm"
-    SMTP_FROM_EMAIL: str = "devdab.contact@gmail.com"
+    SMTP_HOST: str = ""
+    SMTP_PORT: int =
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
     SMTP_USE_TLS: bool = True
 
     class Config:
