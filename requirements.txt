@@ -12,3 +12,5 @@ alembic>=1.14.0
 python-dotenv>=1.0.1
 cryptography>=44.0.0
 email-validator>=2.0.0
+slowapi>=0.1.9
+apscheduler>=3.10.4

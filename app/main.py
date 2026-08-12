@@ -1,11 +1,23 @@
 import uuid
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 from app.api.v1 import auth, facilities, residents, assessments, qapi
 from app.core.database import engine, Base
+from app.core.rate_limit import limiter
+from app.core.scheduler import scheduler
+from app.core.config import settings
 
 # Create database tables on startup
 Base.metadata.create_all(bind=engine)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler.start()
+    yield
+    scheduler.shutdown()
 
 app = FastAPI(
     title="QAPIShield API",
@@ -13,12 +25,23 @@ app = FastAPI(
     docs_url="/docs",
 redoc_url="/redoc",
 openapi_url="/openapi.json",
+    lifespan=lifespan,
 )
+
+app.state.limiter = limiter
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    response = JSONResponse(
+        status_code=429,
+        content={"detail": "You've made too many attempts. Please try again in a while."},
+    )
+    return limiter._inject_headers(response, request.state.view_rate_limit)
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

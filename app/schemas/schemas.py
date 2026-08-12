@@ -27,6 +27,28 @@ class TokenData(BaseModel):
     user_id: Optional[int] = None
     facility_id: Optional[int] = None
 
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+class MessageResponse(BaseModel):
+    message: str
+
+class StaffInviteRequest(BaseModel):
+    email: EmailStr
+    full_name: str
+    role: UserRole
+
+class AcceptInviteRequest(BaseModel):
+    token: str
+    password: str
+
 # Facility schemas
 class FacilityCreate(BaseModel):
     name: str
@@ -113,6 +135,7 @@ class UserResponse(BaseModel):
     role: UserRole
     facility_id: int
     is_active: bool
-    
+    is_verified: bool
+
     class Config:
         from_attributes = True
