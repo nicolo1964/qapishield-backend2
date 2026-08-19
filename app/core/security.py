@@ -1,8 +1,10 @@
 """
 Security utilities for JWT tokens and password hashing
 """
+import hashlib
+import secrets
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Tuple
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from app.core.config import settings
@@ -36,3 +38,9 @@ def decode_access_token(token: str) -> Optional[dict]:
         return payload
     except JWTError:
         return None
+
+def generate_refresh_token() -> Tuple[str, str]:
+    """Generate a refresh token. Returns (raw_token, sha256_hash) — store only the hash."""
+    raw = secrets.token_urlsafe(64)
+    token_hash = hashlib.sha256(raw.encode()).hexdigest()
+    return raw, token_hash

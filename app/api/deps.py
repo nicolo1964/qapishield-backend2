@@ -6,7 +6,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import decode_access_token
-from app.models.models import AuditActionType, AuditOutcome, User, UserRole
+from app.models.models import AuditActionType, AuditOutcome, SubscriptionStatus, User, UserRole
 from app.services.audit import log_audit_event
 
 # Defined locally (not imported from app.api.v1.auth) so this module has no
@@ -63,3 +63,24 @@ def require_role(*allowed_roles: UserRole, action_type: AuditActionType, resourc
             )
         return current_user
     return role_checker
+
+def require_active_subscription(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Blocks facility-scoped writes unless the facility's subscription is active.
+    Read endpoints and account-management endpoints (login, billing itself, etc.)
+    should NOT use this, so a suspended facility's admin can still resolve payment.
+    """
+    subscription = current_user.facility.subscription
+    current_status = subscription.status if subscription else SubscriptionStatus.PENDING_PAYMENT
+    if current_status != SubscriptionStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "message": "Your facility's subscription is not active. Please complete or update payment.",
+                "error_code": "SUBSCRIPTION_INACTIVE",
+                "subscription_status": current_status.value,
+            },
+        )
+    return current_user
