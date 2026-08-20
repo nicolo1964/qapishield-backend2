@@ -28,6 +28,11 @@ class AuditOutcome(str, enum.Enum):
     SUCCESS = "success"
     FAILURE = "failure"
 
+class SubscriptionStatus(str, enum.Enum):
+    PENDING_PAYMENT = "pending_payment"
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+
 class Facility(Base):
     __tablename__ = "facilities"
     
@@ -40,13 +45,15 @@ class Facility(Base):
     zip_code = Column(String(10))
     phone = Column(String(20))
     bed_count = Column(Integer)
+    stripe_customer_id = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # Relationships
     users = relationship("User", back_populates="facility")
     residents = relationship("Resident", back_populates="facility")
     assessments = relationship("Assessment", back_populates="facility")
+    subscription = relationship("Subscription", uselist=False, back_populates="facility")
 
 class User(Base):
     __tablename__ = "users"
@@ -120,3 +127,53 @@ class AuditLog(Base):
     request_id = Column(String(36), nullable=False)
     outcome = Column(Enum(AuditOutcome, values_callable=lambda x: [e.value for e in x]), nullable=False)
     changed_fields = Column(Text, nullable=True)  # JSON array of field names only, never values
+
+class SubscriptionPlan(Base):
+    __tablename__ = "subscription_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stripe_product_id = Column(String(255), nullable=False)
+    stripe_price_id = Column(String(255), unique=True, nullable=False)
+    name = Column(String(255), nullable=False)
+    description = Column(String(500), nullable=True)
+    amount = Column(Integer, nullable=False)  # cents
+    currency = Column(String(10), nullable=False)
+    interval = Column(String(20), nullable=False)  # e.g. "month"
+    active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    subscriptions = relationship("Subscription", back_populates="plan")
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    facility_id = Column(Integer, ForeignKey("facilities.id"), unique=True, nullable=False)
+    plan_id = Column(Integer, ForeignKey("subscription_plans.id"), nullable=True)
+    stripe_subscription_id = Column(String(255), nullable=True)
+    status = Column(
+        Enum(SubscriptionStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=SubscriptionStatus.PENDING_PAYMENT,
+    )
+    current_period_start = Column(DateTime(timezone=True), nullable=True)
+    current_period_end = Column(DateTime(timezone=True), nullable=True)
+    cancel_at_period_end = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    facility = relationship("Facility", back_populates="subscription")
+    plan = relationship("SubscriptionPlan", back_populates="subscriptions")
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    token_hash = Column(String(64), unique=True, nullable=False)  # sha256 hex digest
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    revoked = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

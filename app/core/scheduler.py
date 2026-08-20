@@ -2,6 +2,7 @@
 In-process scheduler for periodic jobs (email verification reminders)
 """
 from datetime import datetime, timedelta, timezone
+import sentry_sdk
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import text
 from app.core.database import SessionLocal
@@ -48,6 +49,12 @@ def send_verification_reminders() -> None:
             )
 
         db.commit()
+    except Exception:
+        # This runs in APScheduler's background thread, outside any request,
+        # so it's not covered by Sentry's FastAPI/Starlette integration —
+        # capture explicitly or failures here disappear silently.
+        sentry_sdk.capture_exception()
+        raise
     finally:
         db.close()
 

@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.models.models import Assessment, Resident, User
 from app.schemas.schemas import AssessmentCreate, AssessmentResponse, CarePlanRequest, CarePlanResponse
 from app.api.v1.auth import get_current_user
+from app.api.deps import require_active_subscription
 from app.services.risk_assessment import assess_risk, generate_care_plan
 import json
 
@@ -17,6 +18,7 @@ router = APIRouter()
 async def create_assessment(
     assessment_data: AssessmentCreate,
     current_user: User = Depends(get_current_user),
+    _subscription: User = Depends(require_active_subscription),
     db: Session = Depends(get_db)
 ):
     """
@@ -71,6 +73,7 @@ async def create_assessment(
 async def generate_care_plan_endpoint(
     request: CarePlanRequest,
     current_user: User = Depends(get_current_user),
+    _subscription: User = Depends(require_active_subscription),
     db: Session = Depends(get_db)
 ):
     """

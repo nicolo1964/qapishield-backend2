@@ -8,7 +8,7 @@ from app.core.database import get_db
 from app.models.models import AuditActionType, AuditOutcome, Resident, User, UserRole
 from app.schemas.schemas import ResidentCreate, ResidentResponse
 from app.api.v1.auth import get_current_user
-from app.api.deps import require_role
+from app.api.deps import require_role, require_active_subscription
 from app.services.audit import log_audit_event
 
 router = APIRouter()
@@ -18,6 +18,7 @@ async def create_resident(
     resident_data: ResidentCreate,
     request: Request,
     current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.DON, action_type=AuditActionType.CREATE)),
+    _subscription: User = Depends(require_active_subscription),
     db: Session = Depends(get_db)
 ):
     """
@@ -132,6 +133,7 @@ async def deactivate_resident(
     resident_id: int,
     request: Request,
     current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.DON, action_type=AuditActionType.UPDATE)),
+    _subscription: User = Depends(require_active_subscription),
     db: Session = Depends(get_db)
 ):
     """

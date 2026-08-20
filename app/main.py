@@ -1,14 +1,18 @@
 import uuid
+import sentry_sdk
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
-from app.api.v1 import auth, facilities, residents, assessments, qapi
+from app.api.v1 import auth, facilities, residents, assessments, qapi, billing
 from app.core.database import engine, Base
 from app.core.rate_limit import limiter
 from app.core.scheduler import scheduler
 from app.core.config import settings
+from app.core.sentry import init_sentry
+
+init_sentry()
 
 # Create database tables on startup
 Base.metadata.create_all(bind=engine)
@@ -50,6 +54,7 @@ app.add_middleware(
 @app.middleware("http")
 async def add_request_id(request: Request, call_next):
     request.state.request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    sentry_sdk.set_tag("request_id", request.state.request_id)
     return await call_next(request)
 
 # Include Routers
@@ -58,6 +63,7 @@ app.include_router(facilities.router, prefix="/api/v1/facilities", tags=["Facili
 app.include_router(residents.router, prefix="/api/v1/residents", tags=["Residents"])
 app.include_router(assessments.router, prefix="/api/v1/assessments", tags=["Assessments"])
 app.include_router(qapi.router, prefix="/api/v1/qapi", tags=["QAPI"])
+app.include_router(billing.router, prefix="/api/v1/billing", tags=["Billing"])
 
 @app.get("/")
 async def root():

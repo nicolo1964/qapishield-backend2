@@ -4,7 +4,7 @@ Pydantic schemas for request/response validation
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime
-from app.models.models import UserRole, RiskLevel
+from app.models.models import UserRole, RiskLevel, SubscriptionStatus
 
 # Auth schemas
 class UserLogin(BaseModel):
@@ -21,11 +21,15 @@ class UserRegister(BaseModel):
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str
 
 class TokenData(BaseModel):
     user_id: Optional[int] = None
     facility_id: Optional[int] = None
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 class ResendVerificationRequest(BaseModel):
     email: EmailStr
@@ -48,6 +52,51 @@ class StaffInviteRequest(BaseModel):
 class AcceptInviteRequest(BaseModel):
     token: str
     password: str
+
+# Billing schemas
+class CheckoutSessionRequest(BaseModel):
+    plan_id: int
+
+class CheckoutSessionResponse(BaseModel):
+    checkout_url: str
+
+class PortalSessionResponse(BaseModel):
+    portal_url: str
+
+class PlanResponse(BaseModel):
+    id: int
+    stripe_product_id: str
+    stripe_price_id: str
+    name: str
+    description: Optional[str]
+    amount: int
+    currency: str
+    interval: str
+    active: bool
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+class SubscriptionResponse(BaseModel):
+    id: int
+    facility_id: int
+    plan_id: Optional[int]
+    stripe_subscription_id: Optional[str]
+    status: SubscriptionStatus
+    current_period_start: Optional[datetime]
+    current_period_end: Optional[datetime]
+    cancel_at_period_end: bool
+    created_at: datetime
+    updated_at: Optional[datetime]
+    plan: Optional[PlanResponse] = None
+
+    class Config:
+        from_attributes = True
+
+class BillingStatusResponse(BaseModel):
+    subscription: Optional[SubscriptionResponse] = None
 
 # Facility schemas
 class FacilityCreate(BaseModel):

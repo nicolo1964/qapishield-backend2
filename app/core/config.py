@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     
     # CORS
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173", "https://app.qapishield.com"]
@@ -49,6 +50,18 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM_EMAIL: str = ""
     SMTP_USE_TLS: bool = True
+
+    # Stripe billing
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    FRONTEND_BILLING_SUCCESS_URL: str = "http://localhost:3000/billing/success"
+    FRONTEND_BILLING_CANCEL_URL: str = "http://localhost:3000/billing/cancel"
+    FRONTEND_BILLING_PORTAL_RETURN_URL: str = "http://localhost:3000/billing"
+
+    # Sentry error monitoring
+    SENTRY_DSN: str = ""
+    SENTRY_ENVIRONMENT: str = "development"
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.0
 
     class Config:
         env_file = ".env.local"  # Use .env.local for local development

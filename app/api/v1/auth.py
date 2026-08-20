@@ -7,14 +7,16 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.core.security import verify_password, get_password_hash, create_access_token, decode_access_token
+from app.core.security import (
+    verify_password, get_password_hash, create_access_token, decode_access_token, generate_refresh_token,
+)
 from app.core.rate_limit import limiter
-from app.api.deps import require_role
-from app.models.models import AuditActionType, User, Facility, UserRole
+from app.api.deps import require_role, require_active_subscription
+from app.models.models import AuditActionType, RefreshToken, User, Facility, UserRole
 from app.schemas.schemas import (
     UserLogin, UserRegister, Token, UserResponse,
     ResendVerificationRequest, ForgotPasswordRequest, ResetPasswordRequest, MessageResponse,
-    StaffInviteRequest, AcceptInviteRequest,
+    StaffInviteRequest, AcceptInviteRequest, RefreshTokenRequest,
 )
 from app.services.email import (
     send_verification_email, send_password_reset_email, send_staff_invite_email,
@@ -25,6 +27,16 @@ from app.core.config import settings
 
 def _password_fingerprint(hashed_password: str) -> str:
     return hashlib.sha256(hashed_password.encode()).hexdigest()[:16]
+
+def _issue_refresh_token(db: Session, user_id: int) -> str:
+    raw_token, token_hash = generate_refresh_token()
+    db.add(RefreshToken(
+        user_id=user_id,
+        token_hash=token_hash,
+        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+    ))
+    db.commit()
+    return raw_token
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -148,8 +160,63 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         data={"sub": str(user.id), "facility_id": user.facility_id},
         expires_delta=access_token_expires
     )
-    
-    return {"access_token": access_token, "token_type": "bearer"}
+    refresh_token = _issue_refresh_token(db, user.id)
+
+    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
+
+@router.post("/refresh", response_model=Token)
+async def refresh_access_token(body: RefreshTokenRequest, db: Session = Depends(get_db)):
+    """
+    Exchange a refresh token for a new access token. Rotates the refresh
+    token on every use (the given one is revoked, a new one is issued).
+    Presenting an already-revoked token revokes all of that user's refresh
+    tokens, since it signals the token may have been stolen/replayed.
+    """
+    token_hash = hashlib.sha256(body.refresh_token.encode()).hexdigest()
+    stored = db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).first()
+
+    invalid_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired refresh token"
+    )
+
+    if not stored:
+        raise invalid_exception
+
+    if stored.revoked:
+        db.query(RefreshToken).filter(
+            RefreshToken.user_id == stored.user_id, RefreshToken.revoked == False
+        ).update({"revoked": True})
+        db.commit()
+        raise invalid_exception
+
+    if stored.expires_at < datetime.now(timezone.utc):
+        raise invalid_exception
+
+    user = db.query(User).filter(User.id == stored.user_id).first()
+    if not user:
+        raise invalid_exception
+
+    stored.revoked = True
+    db.commit()
+
+    access_token = create_access_token(
+        data={"sub": str(user.id), "facility_id": user.facility_id},
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    new_refresh_token = _issue_refresh_token(db, user.id)
+
+    return {"access_token": access_token, "refresh_token": new_refresh_token, "token_type": "bearer"}
+
+@router.post("/logout", response_model=MessageResponse)
+async def logout(body: RefreshTokenRequest, db: Session = Depends(get_db)):
+    """
+    Revoke a refresh token, ending that session early.
+    """
+    token_hash = hashlib.sha256(body.refresh_token.encode()).hexdigest()
+    db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).update({"revoked": True})
+    db.commit()
+    return {"message": "Logged out successfully"}
 
 @router.get("/verify-email", response_model=MessageResponse)
 async def verify_email(token: str, db: Session = Depends(get_db)):
@@ -262,6 +329,7 @@ async def invite_staff(
     body: StaffInviteRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(require_role(UserRole.ADMIN, action_type=AuditActionType.CREATE, resource_type="user")),
+    _subscription: User = Depends(require_active_subscription),
     db: Session = Depends(get_db),
 ):
     """
