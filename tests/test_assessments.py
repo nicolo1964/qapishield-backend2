@@ -3,7 +3,9 @@ Assessment endpoint tests: create, care-plan generation, and read
 endpoints — facility scoping and subscription gating (no role
 restriction exists on this module).
 """
-from app.models.models import Assessment, Facility, Resident, RiskLevel, UserRole
+from app.models.models import (
+    Assessment, AuditActionType, AuditLog, AuditOutcome, Facility, Resident, RiskLevel, UserRole,
+)
 from tests.conftest import auth_headers, make_user
 
 
@@ -61,6 +63,29 @@ def test_create_assessment_resident_in_other_facility_returns_404(client, facili
         headers=auth_headers(nurse),
     )
     assert response.status_code == 404
+
+
+def test_create_assessment_logs_audit_event(client, facility, db_session, active_subscription):
+    nurse = make_user(db_session, facility, UserRole.NURSE)
+    resident = _make_resident(db_session, facility)
+    db_session.commit()
+
+    response = client.post(
+        "/api/v1/assessments/",
+        json={"resident_id": resident.id, "assessment_type": "falls", "risk_factors": {}},
+        headers=auth_headers(nurse),
+    )
+    assert response.status_code == 201
+    assessment_id = response.json()["id"]
+
+    log = db_session.query(AuditLog).filter(
+        AuditLog.resource_type == "assessment",
+        AuditLog.resource_id == assessment_id,
+        AuditLog.action_type == AuditActionType.CREATE,
+    ).first()
+    assert log is not None
+    assert log.outcome == AuditOutcome.SUCCESS
+    assert log.actor_user_id == nurse.id
 
 
 def test_create_assessment_without_active_subscription_rejected(client, facility, db_session):
@@ -140,6 +165,24 @@ def test_get_resident_assessments_happy_path(client, facility, db_session, activ
     assert len(response.json()) == 1
 
 
+def test_get_resident_assessments_logs_read_audit_event(client, facility, db_session, active_subscription):
+    nurse = make_user(db_session, facility, UserRole.NURSE)
+    resident = _make_resident(db_session, facility)
+    _make_assessment(db_session, facility, resident, nurse)
+    db_session.commit()
+
+    response = client.get(f"/api/v1/assessments/resident/{resident.id}", headers=auth_headers(nurse))
+    assert response.status_code == 200
+
+    log = db_session.query(AuditLog).filter(
+        AuditLog.resource_type == "assessment",
+        AuditLog.action_type == AuditActionType.READ,
+        AuditLog.actor_user_id == nurse.id,
+    ).first()
+    assert log is not None
+    assert log.outcome == AuditOutcome.SUCCESS
+
+
 def test_get_resident_assessments_facility_scoping(client, facility, db_session):
     nurse = make_user(db_session, facility, UserRole.NURSE)
 
@@ -163,6 +206,47 @@ def test_get_assessment_happy_path(client, facility, db_session, active_subscrip
     response = client.get(f"/api/v1/assessments/{assessment.id}", headers=auth_headers(nurse))
     assert response.status_code == 200
     assert response.json()["id"] == assessment.id
+
+
+def test_get_assessment_logs_read_audit_event(client, facility, db_session, active_subscription):
+    nurse = make_user(db_session, facility, UserRole.NURSE)
+    resident = _make_resident(db_session, facility)
+    assessment = _make_assessment(db_session, facility, resident, nurse)
+    db_session.commit()
+
+    response = client.get(f"/api/v1/assessments/{assessment.id}", headers=auth_headers(nurse))
+    assert response.status_code == 200
+
+    log = db_session.query(AuditLog).filter(
+        AuditLog.resource_type == "assessment",
+        AuditLog.resource_id == assessment.id,
+        AuditLog.action_type == AuditActionType.READ,
+    ).first()
+    assert log is not None
+    assert log.outcome == AuditOutcome.SUCCESS
+
+
+def test_generate_care_plan_logs_update_audit_event(client, facility, db_session, active_subscription):
+    nurse = make_user(db_session, facility, UserRole.NURSE)
+    resident = _make_resident(db_session, facility)
+    assessment = _make_assessment(db_session, facility, resident, nurse)
+    db_session.commit()
+
+    response = client.post(
+        "/api/v1/assessments/care-plan",
+        json={"assessment_id": assessment.id},
+        headers=auth_headers(nurse),
+    )
+    assert response.status_code == 200
+
+    log = db_session.query(AuditLog).filter(
+        AuditLog.resource_type == "assessment",
+        AuditLog.resource_id == assessment.id,
+        AuditLog.action_type == AuditActionType.UPDATE,
+    ).first()
+    assert log is not None
+    assert log.outcome == AuditOutcome.SUCCESS
+    assert log.changed_fields == '["care_plan"]'
 
 
 def test_get_assessment_from_other_facility_returns_404(client, facility, db_session):
