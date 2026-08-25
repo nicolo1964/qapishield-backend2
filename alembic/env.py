@@ -8,15 +8,18 @@ import os
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from app.core.config import settings
-from app.core.database import Base
+from app.core.database import Base, SQLALCHEMY_DATABASE_URL
 from app.models.models import *  # Import all models
 
 # this is the Alembic Config object
 config = context.config
 
-# Set sqlalchemy.url from settings
-config.set_main_option('sqlalchemy.url', settings.DATABASE_URL)
+# Reuse the exact same normalized URL the app's own engine uses (rewritten to
+# the postgresql+psycopg:// v3 driver in app/core/database.py). Using the raw
+# settings.DATABASE_URL here made SQLAlchemy default to the psycopg2 dialect,
+# which is not installed, so every migration run failed with
+# "ModuleNotFoundError: No module named 'psycopg2'".
+config.set_main_option('sqlalchemy.url', SQLALCHEMY_DATABASE_URL)
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:
