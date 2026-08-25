@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # QAPIShield Backend Start Script
 # This script initializes the database and starts the FastAPI server
