@@ -220,8 +220,10 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             elif stripe_status in ("past_due", "unpaid", "canceled", "incomplete_expired"):
                 subscription.status = SubscriptionStatus.SUSPENDED
             subscription.stripe_subscription_id = data.get("id")
-            subscription.current_period_start = _to_datetime(data.get("current_period_start"))
-            subscription.current_period_end = _to_datetime(data.get("current_period_end"))
+            items = (data.get("items") or {}).get("data", [])
+            first_item = items[0] if items else {}
+            subscription.current_period_start = _to_datetime(first_item.get("current_period_start"))
+            subscription.current_period_end = _to_datetime(first_item.get("current_period_end"))
             subscription.cancel_at_period_end = bool(data.get("cancel_at_period_end"))
             db.commit()
 
