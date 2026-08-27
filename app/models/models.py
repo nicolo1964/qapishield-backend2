@@ -118,7 +118,7 @@ class AuditLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    actor_role = Column(Enum(UserRole, values_callable=lambda x: [e.value for e in x]), nullable=False)
+    actor_role = Column(Enum(UserRole), nullable=False)
     action_type = Column(Enum(AuditActionType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     resource_type = Column(String(50), nullable=False)
     resource_id = Column(Integer, nullable=True)
