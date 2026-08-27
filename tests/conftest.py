@@ -1,12 +1,22 @@
 """
 Pytest configuration and shared fixtures.
 
-Ordering here is load-bearing: env vars must be set, the User.role enum bug
+Ordering here is load-bearing: env vars must be set, the enum column bugs
 patched, and the test database migrated to head BEFORE `app.main` is ever
 imported — importing it runs `Base.metadata.create_all()` immediately at
 module level, which must land on a database that's already correctly
 migrated (real Alembic migrations, not create_all, are what create the
 Postgres-specific append-only triggers this app relies on).
+
+Production's `userrole`/`risklevel` Postgres enum types ended up with
+uppercase labels (via an out-of-band `create_all()` race), so
+`User.role`/`Assessment.risk_level`/`AuditLog.actor_role` intentionally
+have no `values_callable` in source — SQLAlchemy's default sends the
+enum member's `.name` (uppercase), matching production's actual live
+types. This test database is built cleanly via real Alembic migrations,
+so it has the labels migration 001 actually declares (lowercase) —
+these three columns are patched here, test-process-only, to send
+lowercase so they match this test database.
 """
 import os
 import secrets
@@ -26,8 +36,6 @@ from sqlalchemy.orm import sessionmaker
 import psycopg
 
 # --- 2. Enum column fixes, test-process-only (app/models/models.py is never edited) ---
-# Same pre-existing values_callable bug on two columns: User.role and
-# Assessment.risk_level. Both are patched here rather than in source.
 import app.models.models as models
 
 models.User.__table__.c.role.type = SAEnum(
@@ -35,6 +43,9 @@ models.User.__table__.c.role.type = SAEnum(
 )
 models.Assessment.__table__.c.risk_level.type = SAEnum(
     models.RiskLevel, values_callable=lambda x: [e.value for e in x], name="risklevel"
+)
+models.AuditLog.__table__.c.actor_role.type = SAEnum(
+    models.UserRole, values_callable=lambda x: [e.value for e in x], name="userrole"
 )
 
 # --- 3. Create + migrate the test database, before app.main is imported ----
