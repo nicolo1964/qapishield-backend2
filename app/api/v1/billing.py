@@ -1,6 +1,7 @@
 """
 Subscription billing endpoints (Stripe)
 """
+import logging
 from datetime import datetime, timezone
 from typing import List
 import stripe
@@ -17,6 +18,8 @@ from app.services.stripe_service import (
     create_customer, create_checkout_session, create_portal_session,
     verify_webhook_signature, get_product, cancel_subscription, renew_subscription,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -150,8 +153,9 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
 
     try:
         event = verify_webhook_signature(payload, sig_header)
-    except (stripe.error.SignatureVerificationError, ValueError):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook signature")
+    except (stripe.error.SignatureVerificationError, ValueError) as exc:
+        logger.error("Stripe webhook signature verification failed: %s: %s", type(exc).__name__, exc)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook signature") from exc
 
     event_type = event["type"]
     # Stripe's event data objects no longer behave like plain dicts in recent
