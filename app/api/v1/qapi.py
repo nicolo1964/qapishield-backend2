@@ -1,20 +1,22 @@
 """
 QAPI Dashboard endpoints
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from app.core.database import get_db
-from app.models.models import Assessment, Resident, User, RiskLevel
+from app.models.models import Assessment, AuditActionType, AuditOutcome, Resident, User, RiskLevel, UserRole
 from app.schemas.schemas import QAPIDashboardResponse, AssessmentResponse
-from app.api.v1.auth import get_current_user
+from app.api.deps import require_role
+from app.services.audit import log_audit_event
 from typing import List
 
 router = APIRouter()
 
 @router.get("/dashboard", response_model=QAPIDashboardResponse)
 async def get_qapi_dashboard(
-    current_user: User = Depends(get_current_user),
+    request: Request,
+    current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.DON, UserRole.MDS, action_type=AuditActionType.READ, resource_type="qapi_dashboard")),
     db: Session = Depends(get_db)
 ):
     """
@@ -74,7 +76,14 @@ async def get_qapi_dashboard(
             ).scalar()
         }
         risk_breakdown[assessment_type] = type_counts
-    
+
+    log_audit_event(
+        db, request=request, user=current_user,
+        action_type=AuditActionType.READ, resource_type="qapi_dashboard",
+        outcome=AuditOutcome.SUCCESS,
+    )
+    db.commit()
+
     return {
         "facility_id": facility_id,
         "total_residents": total_residents or 0,
@@ -88,7 +97,8 @@ async def get_qapi_dashboard(
 
 @router.get("/high-risk-residents")
 async def get_high_risk_residents(
-    current_user: User = Depends(get_current_user),
+    request: Request,
+    current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.DON, UserRole.MDS, action_type=AuditActionType.READ, resource_type="high_risk_residents")),
     db: Session = Depends(get_db)
 ):
     """
@@ -123,5 +133,12 @@ async def get_high_risk_residents(
             "risk_score": assessment.risk_score,
             "created_at": assessment.created_at
         })
-    
+
+    log_audit_event(
+        db, request=request, user=current_user,
+        action_type=AuditActionType.READ, resource_type="high_risk_residents",
+        outcome=AuditOutcome.SUCCESS,
+    )
+    db.commit()
+
     return list(residents_data.values())
