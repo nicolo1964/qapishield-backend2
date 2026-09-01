@@ -1,10 +1,10 @@
 """
 Pydantic schemas for request/response validation
 """
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime
-from app.models.models import UserRole, RiskLevel, SubscriptionStatus
+from app.models.models import UserRole, RiskLevel, SubscriptionStatus, FacilityStatus
 
 # Auth schemas
 class UserLogin(BaseModel):
@@ -118,6 +118,25 @@ class FacilityResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+# Platform (operator-only) facility provisioning schemas.
+# Deliberately excludes any password field — the operator never sets,
+# sees, or stores an Administrator password; the Administrator sets their
+# own via the existing accept-invite flow.
+class FacilityProvisionRequest(BaseModel):
+    facility_reference: str = Field(..., min_length=1, max_length=100)  # sales/CRM reference; the idempotency key
+    facility_name: str
+    facility_license_number: str
+    facility_bed_count: Optional[int] = None
+    admin_email: EmailStr
+    admin_full_name: str
+
+class FacilityProvisionResponse(BaseModel):
+    facility_id: int
+    facility_reference: str
+    facility_status: FacilityStatus
+    admin_invite_status: str  # "sent" | "already_sent"
+    idempotent_replay: bool  # True when this request matched a prior successful provision
 
 # Resident schemas
 class ResidentCreate(BaseModel):

@@ -33,6 +33,17 @@ class SubscriptionStatus(str, enum.Enum):
     ACTIVE = "active"
     SUSPENDED = "suspended"
 
+class FacilityStatus(str, enum.Enum):
+    """
+    Informational only — does NOT gate access. Access continues to be
+    governed exclusively by Subscription.status via require_active_subscription.
+    This exists so operators/sales can see at a glance whether a
+    provisioned facility's Administrator has accepted their invite yet.
+    """
+    PENDING = "pending"
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+
 class Facility(Base):
     __tablename__ = "facilities"
     
@@ -46,6 +57,15 @@ class Facility(Base):
     phone = Column(String(20))
     bed_count = Column(Integer)
     stripe_customer_id = Column(String(255), nullable=True)
+    # values_callable: send lowercase .value (not the member .name) — this is
+    # a brand-new column/enum type with no legacy production mismatch to
+    # work around (unlike User.role, see tests/conftest.py's docstring).
+    status = Column(
+        Enum(FacilityStatus, values_callable=lambda x: [e.value for e in x], name="facilitystatus"),
+        nullable=True,
+    )  # informational only, see FacilityStatus docstring
+    facility_reference = Column(String(100), unique=True, nullable=True)  # operator-supplied idempotency key
+    provisioned_by_operator_id = Column(Integer, ForeignKey("platform_operators.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -117,12 +137,16 @@ class AuditLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    actor_role = Column(Enum(UserRole), nullable=False)
+    # Exactly one of actor_user_id / actor_operator_id is set on every row
+    # (enforced by ck_audit_logs_actor_present) — a facility-scoped User
+    # action vs. a platform-operator action are never conflated.
+    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    actor_role = Column(Enum(UserRole), nullable=True)
+    actor_operator_id = Column(Integer, ForeignKey("platform_operators.id"), nullable=True)
     action_type = Column(Enum(AuditActionType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     resource_type = Column(String(50), nullable=False)
     resource_id = Column(Integer, nullable=True)
-    facility_id = Column(Integer, ForeignKey("facilities.id"), nullable=False)
+    facility_id = Column(Integer, ForeignKey("facilities.id"), nullable=True)
     ip_address = Column(String(45), nullable=True)
     request_id = Column(String(36), nullable=False)
     outcome = Column(Enum(AuditOutcome, values_callable=lambda x: [e.value for e in x]), nullable=False)
@@ -167,6 +191,22 @@ class Subscription(Base):
     # Relationships
     facility = relationship("Facility", back_populates="subscription")
     plan = relationship("SubscriptionPlan", back_populates="subscriptions")
+
+class PlatformOperator(Base):
+    """
+    Distinct credential store for QAPIShield staff who provision facilities.
+    Deliberately NOT part of the users/facilities model — a facility
+    Administrator's JWT can never satisfy platform-operator authorization,
+    because this table (and the header-based auth checked against it) is a
+    completely separate credential channel from the OAuth2/JWT user login.
+    """
+    __tablename__ = "platform_operators"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)  # human label only, e.g. "Deborah - Sales Ops"
+    key_hash = Column(String(64), unique=True, nullable=False)  # sha256 hex digest of the raw operator key
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"

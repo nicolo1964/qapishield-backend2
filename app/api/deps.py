@@ -1,12 +1,14 @@
 """
 Shared FastAPI dependencies
 """
-from fastapi import Depends, HTTPException, Request, status
+import hashlib
+import hmac
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import decode_access_token
-from app.models.models import AuditActionType, AuditOutcome, SubscriptionStatus, User, UserRole
+from app.models.models import AuditActionType, AuditOutcome, PlatformOperator, SubscriptionStatus, User, UserRole
 from app.services.audit import log_audit_event
 
 # Defined locally (not imported from app.api.v1.auth) so this module has no
@@ -63,6 +65,44 @@ def require_role(*allowed_roles: UserRole, action_type: AuditActionType, resourc
             )
         return current_user
     return role_checker
+
+def require_platform_operator(
+    x_operator_id: str = Header(default=None, alias="X-Operator-Id"),
+    x_operator_key: str = Header(default=None, alias="X-Operator-Key"),
+    db: Session = Depends(get_db),
+) -> PlatformOperator:
+    """
+    Authorizes a platform operator (QAPIShield staff who provision
+    facilities) via a distinct header-based credential, entirely separate
+    from the OAuth2/JWT user-login channel used by get_current_user. A
+    facility Administrator's JWT is never even inspected here, so it can
+    never satisfy this dependency — there is structurally no path from
+    "has a valid facility-scoped user session" to "is a platform operator".
+
+    Missing/malformed headers and unknown/inactive operators all raise the
+    same generic 401 with no DB write, so a caller can't distinguish
+    "wrong id" from "wrong key" from "no headers at all".
+    """
+    denied = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Operator authentication required",
+    )
+    if not x_operator_id or not x_operator_key:
+        raise denied
+    try:
+        operator_id = int(x_operator_id)
+    except ValueError:
+        raise denied
+
+    operator = db.query(PlatformOperator).filter(PlatformOperator.id == operator_id).first()
+    if not operator or not operator.is_active:
+        raise denied
+
+    key_hash = hashlib.sha256(x_operator_key.encode()).hexdigest()
+    if not hmac.compare_digest(key_hash, operator.key_hash):
+        raise denied
+
+    return operator
 
 def require_active_subscription(
     current_user: User = Depends(get_current_user),
