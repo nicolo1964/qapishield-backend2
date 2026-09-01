@@ -79,7 +79,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.core.database import get_db
 from app.core.security import create_access_token, get_password_hash
-from app.models.models import Facility, User, UserRole, Subscription, SubscriptionStatus
+from app.models.models import Facility, PlatformOperator, User, UserRole, Subscription, SubscriptionStatus
 
 engine = create_engine(TEST_DATABASE_URL)
 TestSessionLocal = sessionmaker(bind=engine)
@@ -186,3 +186,21 @@ def active_subscription(db_session, facility):
 def auth_headers(user) -> dict:
     token = create_access_token({"sub": str(user.id), "facility_id": user.facility_id})
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def platform_operator(db_session):
+    """A platform operator with a known raw key, for exercising the
+    operator-only provisioning endpoint. Returns (operator, raw_key,
+    headers) since the raw key only ever exists at creation time."""
+    import hashlib
+    raw_key = f"test-operator-key-{secrets.token_hex(16)}"
+    operator = PlatformOperator(
+        name="Test Operator",
+        key_hash=hashlib.sha256(raw_key.encode()).hexdigest(),
+        is_active=True,
+    )
+    db_session.add(operator)
+    db_session.flush()
+    headers = {"X-Operator-Id": str(operator.id), "X-Operator-Key": raw_key}
+    return operator, raw_key, headers

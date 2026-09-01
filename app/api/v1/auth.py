@@ -22,6 +22,7 @@ from app.services.email import (
     send_verification_email, send_password_reset_email, send_staff_invite_email,
     build_verification_link, build_password_reset_link, build_invite_link,
 )
+from app.services.invitations import create_staff_invite
 from datetime import datetime, timedelta, timezone
 from app.core.config import settings
 
@@ -354,31 +355,12 @@ async def invite_staff(
             detail="Email already registered"
         )
 
-    placeholder_password = get_password_hash(secrets.token_urlsafe(32))
-    user = User(
-        email=body.email,
-        hashed_password=placeholder_password,
-        full_name=body.full_name,
-        role=body.role,
+    result = create_staff_invite(
+        db, background_tasks,
+        email=body.email, full_name=body.full_name, role=body.role,
         facility_id=current_user.facility_id,
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    invite_token = create_access_token(
-        {
-            "sub": str(user.id),
-            "purpose": "staff_invite",
-            "pwd_fp": _password_fingerprint(user.hashed_password),
-        },
-        expires_delta=timedelta(hours=settings.STAFF_INVITE_EXPIRES_HOURS),
-    )
-    background_tasks.add_task(
-        send_staff_invite_email, user.email, build_invite_link(invite_token)
-    )
-
-    return user
+    return result.user
 
 @router.post("/accept-invite", response_model=MessageResponse)
 async def accept_invite(body: AcceptInviteRequest, db: Session = Depends(get_db)):

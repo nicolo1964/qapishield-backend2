@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
-from app.api.v1 import auth, facilities, residents, assessments, qapi, billing
+from app.api.v1 import auth, facilities, residents, assessments, qapi, billing, platform
 from app.core.database import engine, Base
 from app.core.rate_limit import limiter
 from app.core.scheduler import scheduler
@@ -64,6 +64,13 @@ app.include_router(residents.router, prefix="/api/v1/residents", tags=["Resident
 app.include_router(assessments.router, prefix="/api/v1/assessments", tags=["Assessments"])
 app.include_router(qapi.router, prefix="/api/v1/qapi", tags=["QAPI"])
 app.include_router(billing.router, prefix="/api/v1/billing", tags=["Billing"])
+# Operator-only facility provisioning. include_in_schema=False keeps this
+# entirely out of /docs, /redoc, and /openapi.json -- it is not a public
+# customer-registration feature and must never be discoverable there.
+app.include_router(
+    platform.router, prefix="/api/v1/platform", tags=["Platform (internal)"],
+    include_in_schema=False,
+)
 
 @app.get("/")
 async def root():
