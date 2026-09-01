@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     LOGIN_RATE_LIMIT: str = "5/minute"
     REGISTER_RATE_LIMIT: str = "1/hour"
 
+    # Public self-service signup (creates a new facility + admin). Off by
+    # default — sales-assisted onboarding is the default flow; flip on only
+    # for environments that still need open registration.
+    PUBLIC_REGISTRATION_ENABLED: bool = False
+
     # Account lockout after repeated failed login attempts
     LOGIN_LOCKOUT_THRESHOLD: int = 3
     LOGIN_LOCKOUT_DURATION_MINUTES: int = 15

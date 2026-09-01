@@ -5,10 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
-from app.models.models import Assessment, AuditActionType, AuditOutcome, Resident, User
+from app.models.models import Assessment, AuditActionType, AuditOutcome, Resident, User, UserRole
 from app.schemas.schemas import AssessmentCreate, AssessmentResponse, CarePlanRequest, CarePlanResponse
-from app.api.v1.auth import get_current_user
-from app.api.deps import require_active_subscription
+from app.api.deps import require_active_subscription, require_role
 from app.services.audit import log_audit_event
 from app.services.risk_assessment import assess_risk, generate_care_plan
 import json
@@ -19,7 +18,7 @@ router = APIRouter()
 async def create_assessment(
     assessment_data: AssessmentCreate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.DON, UserRole.MDS, action_type=AuditActionType.CREATE, resource_type="assessment")),
     _subscription: User = Depends(require_active_subscription),
     db: Session = Depends(get_db)
 ):
@@ -95,7 +94,7 @@ async def create_assessment(
 async def generate_care_plan_endpoint(
     body: CarePlanRequest,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.DON, UserRole.MDS, action_type=AuditActionType.UPDATE, resource_type="assessment")),
     _subscription: User = Depends(require_active_subscription),
     db: Session = Depends(get_db)
 ):
@@ -153,7 +152,7 @@ async def generate_care_plan_endpoint(
 async def get_resident_assessments(
     resident_id: int,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.DON, UserRole.MDS, action_type=AuditActionType.READ, resource_type="assessment")),
     db: Session = Depends(get_db)
 ):
     """
@@ -194,7 +193,7 @@ async def get_resident_assessments(
 async def get_assessment(
     assessment_id: int,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.DON, UserRole.MDS, action_type=AuditActionType.READ, resource_type="assessment")),
     db: Session = Depends(get_db)
 ):
     """
