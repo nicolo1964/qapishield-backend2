@@ -52,6 +52,12 @@ async def register(
     """
     Register new facility with admin user (for demo/pilot signups)
     """
+    if not settings.PUBLIC_REGISTRATION_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Public self-service registration is disabled. Contact sales to onboard your facility.",
+        )
+
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
