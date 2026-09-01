@@ -27,6 +27,7 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["SECRET_KEY"] = "test_secret_key_do_not_use_in_production_1234567890"
 os.environ["LOGIN_RATE_LIMIT"] = "1000/minute"
 os.environ["REGISTER_RATE_LIMIT"] = "1000/hour"
+os.environ["PUBLIC_REGISTRATION_ENABLED"] = "True"
 os.environ["SENTRY_DSN"] = ""  # never send test-generated errors to a real Sentry project
 
 import pytest

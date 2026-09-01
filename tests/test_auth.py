@@ -34,6 +34,16 @@ def test_register_happy_path(client, db_session):
     assert user.is_verified is False
 
 
+def test_register_disabled_by_default_returns_403(client, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "PUBLIC_REGISTRATION_ENABLED", False)
+
+    response = client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    assert response.status_code == 403
+
+    user = db_session.query(User).filter(User.email == REGISTER_PAYLOAD["email"]).first()
+    assert user is None
+
+
 def test_register_duplicate_email_rejected(client, facility, db_session):
     make_user(db_session, facility, UserRole.ADMIN, email=REGISTER_PAYLOAD["email"])
     db_session.commit()
