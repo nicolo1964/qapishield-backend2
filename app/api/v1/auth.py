@@ -42,7 +42,12 @@ def _issue_refresh_token(db: Session, user_id: int) -> str:
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
 @limiter.limit(settings.REGISTER_RATE_LIMIT)
 async def register(
     request: Request,

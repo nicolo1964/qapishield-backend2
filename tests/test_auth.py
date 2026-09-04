@@ -44,6 +44,11 @@ def test_register_disabled_by_default_returns_403(client, db_session, monkeypatc
     assert user is None
 
 
+def test_register_is_not_published_in_openapi(client):
+    schema = client.app.openapi()
+    assert "/api/v1/auth/register" not in schema["paths"]
+
+
 def test_register_duplicate_email_rejected(client, facility, db_session):
     make_user(db_session, facility, UserRole.ADMIN, email=REGISTER_PAYLOAD["email"])
     db_session.commit()
